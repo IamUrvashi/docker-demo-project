@@ -19,6 +19,15 @@ pipeline {
 
                         echo "Build triggered by: ${BUILD_USER}"
                         echo "Build User ID: ${BUILD_USER_ID}"
+
+                        def triggeredBy = env.BUILD_USER ?: env.BUILD_USER_ID ?: 'Automated'
+                        def branchName = env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'unknown'
+                        branchName = branchName.replaceFirst(/^origin\\//, '')
+
+                        currentBuild.displayName = "#${env.BUILD_NUMBER} - ${triggeredBy} - ${branchName}"
+                        currentBuild.description = "Triggered by: ${triggeredBy} | Git branch: ${branchName}"
+
+                        echo "Build Display Name: ${currentBuild.displayName}"
                         echo "Git Branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH}"
                         echo "Git Commit: ${env.GIT_COMMIT}"
 
