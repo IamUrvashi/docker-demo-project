@@ -1,12 +1,11 @@
-
-# 1. Select Python base image
-FROM python:3.12-slim
+# 1. Select Python Alpine base image
+FROM python:3.12-alpine
 
 # 2. Set working directory
 WORKDIR /app
 
 # 3. Create a non-root user
-RUN useradd -m appuser
+RUN adduser -D appuser
 
 # 4. Copy requirements file
 COPY requirements.txt .
@@ -25,4 +24,3 @@ EXPOSE 8083
 
 # 9. Start order application
 CMD ["python", "order_app.py"]
-
