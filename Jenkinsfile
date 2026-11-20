@@ -2,9 +2,29 @@ pipeline {
     agent any
 
     stages {
+
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+
+        stage('Build Information') {
+            steps {
+                wrap([$class: 'BuildUser']) {
+                    script {
+                        echo "=================================="
+                        echo "       BUILD INFORMATION"
+                        echo "=================================="
+
+                        echo "Build triggered by: ${BUILD_USER}"
+                        echo "Build User ID: ${BUILD_USER_ID}"
+                        echo "Git Branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH}"
+                        echo "Git Commit: ${env.GIT_COMMIT}"
+
+                        echo "=================================="
+                    }
+                }
             }
         }
 
