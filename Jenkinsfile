@@ -78,11 +78,11 @@ pipeline {
             steps {
                 sh '''
                     echo "Testing Inventory API..."
-                    curl -f "http://host.docker.internal:8082/inventory/stock"
+                    curl -f "http://inventory_service:8082/inventory/stock"
 
                     echo ""
                     echo "Testing Order API..."
-                    curl -f "http://host.docker.internal:8083/order/place?coffeeType=cappuccino&quantity=1"
+                    curl -f "http://order_service:8083/order/place?coffeeType=cappuccino&quantity=1"
 
                     echo ""
                     echo "All API tests passed!"
