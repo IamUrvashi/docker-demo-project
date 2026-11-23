@@ -1,4 +1,3 @@
-
 pipeline {
     agent any
 
@@ -8,16 +7,13 @@ pipeline {
     }
 
     environment {
-        NETWORK_NAME = 'coffee-shop-network'
+        AWS_REGION = 'us-west-2'
+        ECR_REGISTRY = '212773812862.dkr.ecr.us-west-2.amazonaws.com'
 
-        INVENTORY_IMAGE = 'inventory-service:alpine'
-        ORDER_IMAGE = 'order-service:alpine'
+        INVENTORY_REPO = 'inventory-service'
+        ORDER_REPO = 'order-service'
 
-        INVENTORY_CONTAINER = 'inventory_service'
-        ORDER_CONTAINER = 'order_service'
-
-        INVENTORY_PORT = '8082'
-        ORDER_PORT = '8083'
+        IMAGE_TAG = "${BUILD_NUMBER}"
     }
 
     stages {
@@ -25,7 +21,6 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo 'Checking out Coffee Shop project from GitHub...'
-
                 checkout scm
 
                 sh '''
@@ -65,11 +60,10 @@ pipeline {
 
         stage('Build Inventory Image') {
             steps {
-                echo 'Building Inventory Service Docker image...'
-
                 dir('inventory_service') {
                     sh '''
-                        docker build -t ${INVENTORY_IMAGE} .
+                        docker build \
+                          -t ${ECR_REGISTRY}/${INVENTORY_REPO}:${IMAGE_TAG} .
                     '''
                 }
             }
@@ -77,65 +71,80 @@ pipeline {
 
         stage('Build Order Image') {
             steps {
-                echo 'Building Order Service Docker image...'
-
                 dir('order_service') {
                     sh '''
-                        docker build -t ${ORDER_IMAGE} .
+                        docker build \
+                          -t ${ECR_REGISTRY}/${ORDER_REPO}:${IMAGE_TAG} .
                     '''
                 }
             }
         }
 
-        stage('Deploy Services') {
+        stage('ECR Login') {
             steps {
-                echo 'Checking Docker network...'
-
                 sh '''
-                    docker network inspect ${NETWORK_NAME} \
-                    >/dev/null 2>&1 || docker network create ${NETWORK_NAME}
+                    aws ecr get-login-password \
+                      --region ${AWS_REGION} |
+                    docker login \
+                      --username AWS \
+                      --password-stdin ${ECR_REGISTRY}
                 '''
+            }
+        }
 
-                echo 'Removing old containers...'
-
+        stage('Push Images to ECR') {
+            steps {
                 sh '''
-                    docker rm -f ${INVENTORY_CONTAINER} || true
-                    docker rm -f ${ORDER_CONTAINER} || true
+                    docker push \
+                      ${ECR_REGISTRY}/${INVENTORY_REPO}:${IMAGE_TAG}
+
+                    docker push \
+                      ${ECR_REGISTRY}/${ORDER_REPO}:${IMAGE_TAG}
                 '''
+            }
+        }
 
-                echo 'Deploying Inventory Service...'
-
+        stage('Deploy Using Docker Compose') {
+            steps {
                 sh '''
-                    docker run -d \
-                        --name ${INVENTORY_CONTAINER} \
-                        --restart unless-stopped \
-                        --network ${NETWORK_NAME} \
-                        -p ${INVENTORY_PORT}:8082 \
-                        ${INVENTORY_IMAGE}
+                    set -e
+
+                    echo "Checking Docker Compose..."
+                    docker compose version
+
+                    echo "Checking ECR login..."
+                    aws ecr get-login-password \
+                      --region ${AWS_REGION} |
+                    docker login \
+                      --username AWS \
+                      --password-stdin ${ECR_REGISTRY}
+
+                    echo "Validating Compose configuration..."
+                    docker compose config -q
+
+                    echo "Removing old Coffee Shop containers..."
+                    docker rm -f inventory_service order_service \
+                      >/dev/null 2>&1 || true
+
+                    echo "Pulling images from ECR..."
+                    docker compose pull
+
+                    echo "Starting services using Docker Compose..."
+                    docker compose up -d --force-recreate --remove-orphans
+
+                    echo "Checking running services..."
+                    docker compose ps --status running -q inventory-service | grep -q .
+                    docker compose ps --status running -q order-service | grep -q .
+
+                    docker compose ps
+
+                    echo "Deployment successful!"
                 '''
-
-                echo 'Deploying Order Service...'
-
-                sh '''
-                    docker run -d \
-                        --name ${ORDER_CONTAINER} \
-                        --restart unless-stopped \
-                        --network ${NETWORK_NAME} \
-                        -p ${ORDER_PORT}:8083 \
-                        -e INVENTORY_SERVICE_URL=http://inventory_service:8082 \
-                        ${ORDER_IMAGE}
-                '''
-
-                echo 'Deployment completed.'
-
-                sh 'docker ps'
             }
         }
 
         stage('Test APIs') {
             steps {
-                echo 'Testing Inventory and Order APIs...'
-
                 sh '''
                     echo "Waiting for Inventory API..."
 
@@ -179,11 +188,11 @@ pipeline {
 
     post {
         success {
-            echo 'Coffee Shop CI/CD Pipeline completed successfully!'
+            echo 'Coffee Shop ECR + Docker Compose CI/CD Pipeline completed successfully!'
         }
 
         failure {
-            echo 'Coffee Shop CI/CD Pipeline failed. Check Console Output.'
+            echo 'Pipeline failed. Check Console Output.'
         }
 
         always {
@@ -191,4 +200,3 @@ pipeline {
         }
     }
 }
-
