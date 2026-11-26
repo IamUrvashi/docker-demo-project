@@ -108,5 +108,101 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy Files') {
+            steps {
+                script {
+                    writeFile(
+                        file: 'deploy.sh',
+                        text: '''#!/bin/sh
+set -eu
+
+SOURCE_ROOT="$WORKSPACE"
+DEPLOY_ROOT="/deployment/deployment-target"
+BACKUP_ROOT="/deployment/backups"
+
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+while IFS= read -r FILE_PATH || [ -n "$FILE_PATH" ]; do
+    [ -z "$FILE_PATH" ] && continue
+
+    SOURCE="$SOURCE_ROOT/$FILE_PATH"
+    TARGET="$DEPLOY_ROOT/$FILE_PATH"
+    BACKUP_DIR="$BACKUP_ROOT/$(dirname "$FILE_PATH")"
+
+    echo "===================================="
+    echo "Deploying: $FILE_PATH"
+
+    if [ ! -f "$SOURCE" ]; then
+        echo "ERROR: Source file does not exist: $SOURCE"
+        exit 1
+    fi
+
+    mkdir -p "$(dirname "$TARGET")"
+
+    if [ -L "$TARGET" ]; then
+        echo "ERROR: Target is a symbolic link: $TARGET"
+        exit 1
+    fi
+
+    if [ -f "$TARGET" ]; then
+        mkdir -p "$BACKUP_DIR"
+
+        ORIGINAL_MODE=$(stat -c '%a' "$TARGET")
+        BACKUP="$BACKUP_DIR/$(basename "$FILE_PATH").$TIMESTAMP.bak"
+
+        if [ -e "$BACKUP" ]; then
+            echo "ERROR: Backup already exists: $BACKUP"
+            exit 1
+        fi
+
+        cp -p "$TARGET" "$BACKUP"
+
+        echo "Backup created: $BACKUP"
+        echo "Original target permissions: $ORIGINAL_MODE"
+    else
+        ORIGINAL_MODE=644
+        echo "Target does not exist. No backup required."
+        echo "Default permissions for new file: $ORIGINAL_MODE"
+    fi
+
+    cp "$SOURCE" "$TARGET"
+    chmod "$ORIGINAL_MODE" "$TARGET"
+
+    SOURCE_HASH=$(sha256sum "$SOURCE" | awk '{print $1}')
+    TARGET_HASH=$(sha256sum "$TARGET" | awk '{print $1}')
+    TARGET_MODE=$(stat -c '%a' "$TARGET")
+
+    echo "Source SHA256: $SOURCE_HASH"
+    echo "Target SHA256: $TARGET_HASH"
+    echo "Target permissions: $TARGET_MODE"
+
+    if [ "$SOURCE_HASH" != "$TARGET_HASH" ]; then
+        echo "ERROR: Checksum verification failed."
+        exit 1
+    fi
+
+    if [ "$TARGET_MODE" != "$ORIGINAL_MODE" ]; then
+        echo "ERROR: Permission verification failed."
+        exit 1
+    fi
+
+    echo "SUCCESS: Deployment and verification completed."
+
+done < "$SOURCE_ROOT/deploy-files.txt"
+'''
+                    )
+
+                    sh '''
+                        docker run --rm \
+                            --volumes-from jenkins \
+                            -v /Users/ughangare/File-Deployment-Project:/deployment \
+                            -e WORKSPACE="$WORKSPACE" \
+                            alpine:3.20 \
+                            sh "$WORKSPACE/deploy.sh"
+                    '''
+                }
+            }
+        }
     }
 }
