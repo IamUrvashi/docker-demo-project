@@ -30,7 +30,7 @@ pipeline {
     stages {
         stage('Build Information') {
             steps {
-                wrap([$class: 'BuildUser']) {
+                withBuildUser() {
                     script {
                         def buildUser = env.BUILD_USER ?: 'Unknown'
                         def branch = env.GIT_BRANCH ?: 'Unknown'
@@ -38,14 +38,13 @@ pipeline {
                         branch = branch.replaceFirst('^origin/', '')
 
                         currentBuild.displayName =
-                            "#${env.BUILD_NUMBER} - ${buildUser} - ${branch}"
+                            "#${BUILD_NUMBER} - ${buildUser} - ${branch}"
 
                         currentBuild.description =
-                            "Triggered by ${buildUser} | Branch: ${branch}"
+                            "Triggered by: ${buildUser} | Git branch: ${branch}"
 
-                        echo "Build Number: ${env.BUILD_NUMBER}"
-                        echo "Build User: ${buildUser}"
-                        echo "Git Branch: ${branch}"
+                        echo "Triggered by: ${buildUser}"
+                        echo "Git branch: ${branch}"
                     }
                 }
             }
