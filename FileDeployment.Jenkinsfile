@@ -52,11 +52,60 @@ pipeline {
 
         stage('Validate Deployment Inputs') {
             steps {
-                echo "JIRA Ticket: ${params.JIRA_ID}"
-                echo "Repository: ${params.GIT_REPOSITORY}"
-                echo "Target: ${params.TARGET_SERVER}"
-                echo 'Files requested:'
-                echo "${params.FILES_TO_DEPLOY}"
+                script {
+                    if (!params.JIRA_ID?.trim()) {
+                        error('JIRA ID is mandatory.')
+                    }
+
+                    if (params.GIT_REPOSITORY != 'coffee-shop') {
+                        error('Unsupported Git repository selected.')
+                    }
+
+                    if (params.TARGET_SERVER != 'local-simulation') {
+                        error('Unsupported deployment target selected.')
+                    }
+
+                    def requestedFiles = params.FILES_TO_DEPLOY
+                        .readLines()
+                        .collect { it.trim() }
+                        .findAll { it }
+
+                    if (requestedFiles.isEmpty()) {
+                        error('Please provide at least one file to deploy.')
+                    }
+
+                    requestedFiles.each { filePath ->
+                        if (filePath.startsWith('/') ||
+                            filePath.tokenize('/').contains('..') ||
+                            filePath.contains('\\')) {
+                            error("Unsafe file path: ${filePath}")
+                        }
+
+                        if (!fileExists(filePath)) {
+                            error("File not found in Git repository: ${filePath}")
+                        }
+                    }
+
+                    writeFile(
+                        file: 'deploy-files.txt',
+                        text: requestedFiles.join('\n') + '\n'
+                    )
+
+                    sh '''
+                        while IFS= read -r file; do
+                            if [ ! -f "$file" ]; then
+                                echo "ERROR: Not a regular file: $file"
+                                exit 1
+                            fi
+                        done < deploy-files.txt
+                    '''
+
+                    echo "JIRA Ticket: ${params.JIRA_ID}"
+                    echo "Repository: ${params.GIT_REPOSITORY}"
+                    echo "Target: ${params.TARGET_SERVER}"
+                    echo "Validated files:"
+                    echo "${requestedFiles.join('\n')}"
+                }
             }
         }
     }
