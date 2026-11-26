@@ -28,6 +28,29 @@ pipeline {
     }
 
     stages {
+        stage('Build Information') {
+            steps {
+                wrap([$class: 'BuildUser']) {
+                    script {
+                        def buildUser = env.BUILD_USER ?: 'Unknown'
+                        def branch = env.GIT_BRANCH ?: 'Unknown'
+
+                        branch = branch.replaceFirst('^origin/', '')
+
+                        currentBuild.displayName =
+                            "#${env.BUILD_NUMBER} - ${buildUser} - ${branch}"
+
+                        currentBuild.description =
+                            "Triggered by ${buildUser} | Branch: ${branch}"
+
+                        echo "Build Number: ${env.BUILD_NUMBER}"
+                        echo "Build User: ${buildUser}"
+                        echo "Git Branch: ${branch}"
+                    }
+                }
+            }
+        }
+
         stage('Validate Deployment Inputs') {
             steps {
                 echo "JIRA Ticket: ${params.JIRA_ID}"
