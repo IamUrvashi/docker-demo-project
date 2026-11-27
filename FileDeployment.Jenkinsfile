@@ -145,26 +145,25 @@ while IFS= read -r FILE_PATH || [ -n "$FILE_PATH" ]; do
         exit 1
     fi
 
-    if [ -f "$TARGET" ]; then
-        mkdir -p "$BACKUP_DIR"
-
-        ORIGINAL_MODE=$(stat -c '%a' "$TARGET")
-        BACKUP="$BACKUP_DIR/$(basename "$FILE_PATH").$TIMESTAMP.bak"
-
-        if [ -e "$BACKUP" ]; then
-            echo "ERROR: Backup already exists: $BACKUP"
-            exit 1
-        fi
-
-        cp -p "$TARGET" "$BACKUP"
-
-        echo "Backup created: $BACKUP"
-        echo "Original target permissions: $ORIGINAL_MODE"
-    else
-        ORIGINAL_MODE=644
-        echo "Target does not exist. No backup required."
-        echo "Default permissions for new file: $ORIGINAL_MODE"
+    if [ ! -f "$TARGET" ]; then
+        echo "ERROR: Target file does not exist: $TARGET"
+        exit 1
     fi
+
+    mkdir -p "$BACKUP_DIR"
+
+    ORIGINAL_MODE=$(stat -c '%a' "$TARGET")
+    BACKUP="$BACKUP_DIR/$(basename "$FILE_PATH").$TIMESTAMP.bak"
+
+    if [ -e "$BACKUP" ]; then
+        echo "ERROR: Backup already exists: $BACKUP"
+        exit 1
+    fi
+
+    cp -p "$TARGET" "$BACKUP"
+
+    echo "Backup created: $BACKUP"
+    echo "Original target permissions: $ORIGINAL_MODE"
 
     cp "$SOURCE" "$TARGET"
     chmod "$ORIGINAL_MODE" "$TARGET"
