@@ -41,4 +41,4 @@ def use_ingredient():
                 current_stock[ingredient] -= quantity
 
     return jsonify({"available": available})
-    # File deployment pipeline test
+    # End-to-end deployment verification - 2026-11-27
